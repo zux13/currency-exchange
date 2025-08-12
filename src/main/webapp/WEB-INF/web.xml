@@ -5,6 +5,6 @@
                              https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
          version="6.0">
 
-    <display-name>currency_exchange</display-name>
+    <display-name>currency-exchange</display-name>
 
 </web-app>
