@@ -4,8 +4,8 @@ import dev.zux13.currency.exchange.dao.ExchangeRateDao;
 import dev.zux13.currency.exchange.dto.CurrencyDto;
 import dev.zux13.currency.exchange.dto.ExchangeRateResponseDto;
 import dev.zux13.currency.exchange.dto.ExchangeRateSaveDto;
+import dev.zux13.currency.exchange.dto.ExchangeResponseDto;
 import dev.zux13.currency.exchange.entity.ExchangeRate;
-import dev.zux13.currency.exchange.exception.CurrencyNotFoundException;
 import dev.zux13.currency.exchange.exception.DuplicateExchangeRateException;
 import dev.zux13.currency.exchange.exception.ExchangeRateNotFoundException;
 import dev.zux13.currency.exchange.mapper.ExchangeRateMapper;
@@ -14,6 +14,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,7 @@ import java.util.Optional;
 public class ExchangeRateService {
 
     private static final ExchangeRateService INSTANCE = new ExchangeRateService();
+    private static final String CROSS_CURRENCY_CODE = "USD";
     private final ExchangeRateDao exchangeRateDao = ExchangeRateDao.getInstance();
     private final CurrencyService currencyService = CurrencyService.getInstance();
 
@@ -42,29 +44,32 @@ public class ExchangeRateService {
         CurrencyDto base = getCurrencyDtoByCode(baseCode);
         CurrencyDto target = getCurrencyDtoByCode(targetCode);
         return ExchangeRateMapper.toDto(
-                        findByCurrencyIds(base.getId(), target.getId()),
+                        findByCurrencyIds(base.id(), target.id()),
                         base,
                         target);
     }
 
-    public Optional<ExchangeRateResponseDto> save(ExchangeRateSaveDto dto)  {
+    public ExchangeRateResponseDto save(ExchangeRateSaveDto dto)  {
         try {
-            CurrencyDto base = getCurrencyDtoByCode(dto.getBaseCurrencyCode());
-            CurrencyDto target = getCurrencyDtoByCode(dto.getTargetCurrencyCode());
-            ExchangeRate saved = exchangeRateDao.save(ExchangeRateMapper.toEntity(dto, base.getId(), target.getId()));
-            return Optional.of(ExchangeRateMapper.toDto(saved, base, target));
+            CurrencyDto base = getCurrencyDtoByCode(dto.baseCurrencyCode());
+            CurrencyDto target = getCurrencyDtoByCode(dto.targetCurrencyCode());
+            ExchangeRate saved = exchangeRateDao.save(ExchangeRateMapper.toEntity(dto, base.id(), target.id()));
+            return ExchangeRateMapper.toDto(saved, base, target);
         } catch (RuntimeException ex) {
             if (SQLExceptionUtils.isUniqueConstraintViolation(ex)) {
-                throw new DuplicateExchangeRateException(dto.getBaseCurrencyCode(), dto.getTargetCurrencyCode());
+                throw new DuplicateExchangeRateException(
+                        "Exchange rate for pair %s/%s already exists"
+                                .formatted(dto.baseCurrencyCode(), dto.targetCurrencyCode())
+                );
             }
             throw ex;
         }
     }
 
-    public ExchangeRateResponseDto updateRate(String baseCode, String targetCode, double rate) {
+    public ExchangeRateResponseDto updateRate(String baseCode, String targetCode, BigDecimal rate) {
         CurrencyDto base = getCurrencyDtoByCode(baseCode);
         CurrencyDto target = getCurrencyDtoByCode(targetCode);
-        ExchangeRate entity = findByCurrencyIds(base.getId(), target.getId());
+        ExchangeRate entity = findByCurrencyIds(base.id(), target.id());
         entity.setRate(rate);
         exchangeRateDao.update(entity);
         return ExchangeRateMapper.toDto(entity, base, target);
@@ -72,47 +77,76 @@ public class ExchangeRateService {
 
     public ExchangeRate findByCurrencyIds(Long baseCurrencyId, Long targetCurrencyId) {
         return exchangeRateDao.findByCurrencyIds(baseCurrencyId, targetCurrencyId)
-                .orElseThrow(() -> new ExchangeRateNotFoundException(baseCurrencyId, targetCurrencyId));
+                .orElseThrow(() -> new ExchangeRateNotFoundException(
+                        "Exchange rate for baseCurrencyId: %d and targetCurrencyId: %d not found"
+                                .formatted(baseCurrencyId, targetCurrencyId)
+                ));
     }
 
-    private CurrencyDto getCurrencyDtoByCode(String code) {
-        return currencyService.findByCode(code)
-                .orElseThrow(() -> new CurrencyNotFoundException(code));
-    }
+    public ExchangeResponseDto exchange(String fromCode, String toCode, BigDecimal amount) {
+        CurrencyDto baseCurrency = getCurrencyDtoByCode(fromCode);
+        CurrencyDto targetCurrency = getCurrencyDtoByCode(toCode);
 
-    private CurrencyDto getCurrencyDtoById(Long id) {
-        return currencyService.findById(id)
-                .orElseThrow(() -> new CurrencyNotFoundException(id));
+        BigDecimal rate = findRateForExchange(baseCurrency.code(), targetCurrency.code())
+                .orElseThrow(() -> new ExchangeRateNotFoundException(
+                        "Exchange rate for pair %s/%s not found".formatted(fromCode, toCode)
+                ));
+
+        BigDecimal convertedAmount = amount.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+
+        return new ExchangeResponseDto(
+                baseCurrency,
+                targetCurrency,
+                rate,
+                amount,
+                convertedAmount
+        );
     }
 
     public Optional<BigDecimal> findRateForExchange(String baseCode, String targetCode) {
-
-        try {
-            ExchangeRateResponseDto direct = findByCurrencyCodes(baseCode, targetCode);
-            return Optional.of(BigDecimal.valueOf(direct.getRate()));
-        } catch (ExchangeRateNotFoundException e) {
+        if (baseCode.equals(targetCode)) {
+            return Optional.of(BigDecimal.ONE);
         }
 
+        return findDirectRate(baseCode, targetCode)
+                .or(() -> findInverseRate(baseCode, targetCode))
+                .or(() -> findCrossRate(baseCode, targetCode));
+    }
+
+    private Optional<BigDecimal> findDirectRate(String baseCode, String targetCode) {
         try {
-            ExchangeRateResponseDto inverse = findByCurrencyCodes(targetCode, baseCode);
-            double inverseRate = inverse.getRate();
-            if (inverseRate == 0) {
-                return Optional.empty();
-            }
-            return Optional.of(BigDecimal.valueOf(1.0 / inverseRate));
+            return Optional.of(findByCurrencyCodes(baseCode, targetCode).rate());
         } catch (ExchangeRateNotFoundException e) {
+            return Optional.empty();
         }
+    }
 
-        try {
-            ExchangeRateResponseDto baseToUsd = findByCurrencyCodes(baseCode, "USD");
-            ExchangeRateResponseDto usdToTarget = findByCurrencyCodes("USD", targetCode);
+    private Optional<BigDecimal> findInverseRate(String baseCode, String targetCode) {
+        return findDirectRate(targetCode, baseCode)
+                .map(rate -> {
+                    if (rate.compareTo(BigDecimal.ZERO) == 0) {
+                        return BigDecimal.ZERO;
+                    }
+                    return BigDecimal.ONE.divide(rate, 6, RoundingMode.HALF_UP);
+                });
+    }
 
-            double rate = baseToUsd.getRate() * usdToTarget.getRate();
-            return Optional.of(BigDecimal.valueOf(rate));
-        } catch (ExchangeRateNotFoundException e) {
+    private Optional<BigDecimal> findCrossRate(String baseCode, String targetCode) {
+        Optional<BigDecimal> baseToCross = findDirectRate(baseCode, CROSS_CURRENCY_CODE);
+        Optional<BigDecimal> crossToTarget = findDirectRate(CROSS_CURRENCY_CODE, targetCode);
+
+        if (baseToCross.isPresent() && crossToTarget.isPresent()) {
+            BigDecimal rate = baseToCross.get().multiply(crossToTarget.get());
+            return Optional.of(rate);
         }
-
         return Optional.empty();
     }
 
+    private CurrencyDto getCurrencyDtoByCode(String code) {
+        return currencyService.findByCode(code);
+    }
+
+    private CurrencyDto getCurrencyDtoById(Long id) {
+        return currencyService.findById(id);
+    }
 }

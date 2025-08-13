@@ -1,12 +1,6 @@
 package dev.zux13.currency.exchange.dto;
 
-import lombok.Builder;
-import lombok.Data;
+import java.math.BigDecimal;
 
-@Data
-@Builder
-public class ExchangeRateSaveDto {
-    private String baseCurrencyCode;
-    private String targetCurrencyCode;
-    private double rate;
+public record ExchangeRateSaveDto(String baseCurrencyCode, String targetCurrencyCode, BigDecimal rate) {
 }

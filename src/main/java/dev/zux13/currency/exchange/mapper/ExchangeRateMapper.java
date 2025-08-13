@@ -10,19 +10,19 @@ import lombok.experimental.UtilityClass;
 public class ExchangeRateMapper {
 
     public ExchangeRateResponseDto toDto(ExchangeRate entity, CurrencyDto base, CurrencyDto target) {
-        return ExchangeRateResponseDto.builder()
-                .id(entity.getId())
-                .baseCurrency(base)
-                .targetCurrency(target)
-                .rate(entity.getRate())
-                .build();
+        return new ExchangeRateResponseDto(
+                entity.getId(),
+                base,
+                target,
+                entity.getRate()
+        );
     }
 
     public ExchangeRate toEntity(ExchangeRateSaveDto dto, Long baseCurrencyId, Long targetCurrencyId) {
         return ExchangeRate.builder()
                 .baseCurrencyId(baseCurrencyId)
                 .targetCurrencyId(targetCurrencyId)
-                .rate(dto.getRate())
+                .rate(dto.rate())
                 .build();
     }
 

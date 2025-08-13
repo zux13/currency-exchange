@@ -8,20 +8,20 @@ import lombok.experimental.UtilityClass;
 public class CurrencyMapper {
 
     public CurrencyDto toDto(Currency entity) {
-        return CurrencyDto.builder()
-                .id(entity.getId())
-                .code(entity.getCode())
-                .name(entity.getName())
-                .sign(entity.getSign())
-                .build();
+        return new CurrencyDto(
+                entity.getId(),
+                entity.getName(),
+                entity.getCode(),
+                entity.getSign()
+        );
     }
 
     public Currency toEntity(CurrencyDto dto) {
         return Currency.builder()
-                .id(dto.getId())
-                .code(dto.getCode())
-                .sign(dto.getSign())
-                .name(dto.getName())
+                .id(dto.id())
+                .code(dto.code())
+                .sign(dto.sign())
+                .name(dto.name())
                 .build();
     }
 }

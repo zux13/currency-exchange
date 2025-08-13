@@ -1,10 +1,9 @@
 package dev.zux13.currency.exchange.servlet;
 
 import dev.zux13.currency.exchange.dto.ExchangeRateResponseDto;
-import dev.zux13.currency.exchange.exception.CurrencyNotFoundException;
-import dev.zux13.currency.exchange.exception.ExchangeRateNotFoundException;
 import dev.zux13.currency.exchange.service.ExchangeRateService;
-import dev.zux13.currency.exchange.util.ServletUtils;
+import dev.zux13.currency.exchange.util.JsonResponseWriter;
+import dev.zux13.currency.exchange.validation.Validator;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -12,7 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
-import java.util.Map;
+import java.math.BigDecimal;
 
 @WebServlet("/exchangeRate/*")
 public class ExchangeRateServlet extends HttpServlet {
@@ -21,88 +20,38 @@ public class ExchangeRateServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        String pathInfo = req.getPathInfo();
-
-        if (ServletUtils.isEmptyPathInfo(pathInfo)) {
-            ServletUtils.writeJsonResponse(resp,
-                    Map.of("message", "Currency codes is required in path."),
-                    HttpServletResponse.SC_BAD_REQUEST
-            );
-            return;
-        }
-
-        String pair = pathInfo.substring(1).toUpperCase();
-
-        if (!ServletUtils.isValidCurrencyPairCodesFormat(pair)) {
-            ServletUtils.writeJsonResponse(resp,
-                    Map.of("message", "Currency pair must be exactly 6 characters (two 3-letter codes)."),
-                    HttpServletResponse.SC_BAD_REQUEST);
-            return;
-        }
-
+        String pair = getCurrencyPairFromPath(req);
         String baseCode = pair.substring(0, 3);
-        String targetCode = pair.substring(3, 6);
+        String targetCode = pair.substring(3);
 
-        try {
-            ExchangeRateResponseDto dto = exchangeRateService.findByCurrencyCodes(baseCode, targetCode);
-            ServletUtils.writeJsonResponse(resp, dto, HttpServletResponse.SC_OK);
-        } catch (CurrencyNotFoundException | ExchangeRateNotFoundException e) {
-            ServletUtils.writeJsonResponse(resp,
-                    Map.of("message", e.getMessage()),
-                    HttpServletResponse.SC_NOT_FOUND
-            );
-        } catch (Exception e) {
-            ServletUtils.writeJsonResponse(resp,
-                    Map.of("message", "Internal server error"),
-                    HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        }
+        ExchangeRateResponseDto dto = exchangeRateService.findByCurrencyCodes(baseCode, targetCode);
+        JsonResponseWriter.write(resp, HttpServletResponse.SC_OK, dto);
     }
 
     @Override
-    protected void doPatch(HttpServletRequest req, HttpServletResponse resp) throws IOException, ServletException {
-        String pathInfo = req.getPathInfo();
-
-        if (!ServletUtils.isValidCurrencyPairCodesFormat(pathInfo)) {
-            ServletUtils.writeJsonResponse(resp,
-                    Map.of("message", "Currency pair must be exactly 6 characters (two 3-letter codes)."),
-                    HttpServletResponse.SC_BAD_REQUEST);
-            return;
+    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        if (req.getMethod().equalsIgnoreCase("PATCH")) {
+            doPatch(req, resp);
+        } else {
+            super.service(req, resp);
         }
+    }
 
-        String pair = pathInfo.substring(1).toUpperCase();
+    protected void doPatch(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String pair = getCurrencyPairFromPath(req);
         String baseCode = pair.substring(0, 3);
-        String targetCode = pair.substring(3, 6);
+        String targetCode = pair.substring(3);
 
         String rateStr = req.getParameter("rate");
-        if (!ServletUtils.isValidParams(rateStr)) {
-            ServletUtils.writeJsonResponse(resp,
-                    Map.of("message", "Missing required field: rate"),
-                    HttpServletResponse.SC_BAD_REQUEST);
-            return;
-        }
+        BigDecimal rate = Validator.validateRate(rateStr);
 
-        double rate;
-        try {
-            rate = Double.parseDouble(rateStr);
-        } catch (NumberFormatException ex) {
-            ServletUtils.writeJsonResponse(resp,
-                    Map.of("message", "Invalid rate format"),
-                    HttpServletResponse.SC_BAD_REQUEST);
-            return;
-        }
+        ExchangeRateResponseDto updated = exchangeRateService.updateRate(baseCode, targetCode, rate);
+        JsonResponseWriter.write(resp, HttpServletResponse.SC_OK, updated);
+    }
 
-        try {
-            ExchangeRateResponseDto updated = exchangeRateService.updateRate(baseCode, targetCode, rate);
-            ServletUtils.writeJsonResponse(resp, updated, HttpServletResponse.SC_OK);
-        } catch (CurrencyNotFoundException | ExchangeRateNotFoundException e) {
-            ServletUtils.writeJsonResponse(resp,
-                    Map.of("message", e.getMessage()),
-                    HttpServletResponse.SC_NOT_FOUND
-            );
-        } catch (Exception e) {
-            ServletUtils.writeJsonResponse(resp,
-                    Map.of("message", "Internal server error"),
-                    HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        }
+    private String getCurrencyPairFromPath(HttpServletRequest req) {
+        String pair = Validator.validateAndExtractPath(req.getPathInfo());
+        Validator.validateCurrencyPair(pair);
+        return pair;
     }
 }
