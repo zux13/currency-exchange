@@ -42,7 +42,10 @@ public class ExchangeRateServlet extends HttpServlet {
         String baseCode = pair.substring(0, 3);
         String targetCode = pair.substring(3);
 
-        String rateStr = req.getParameter("rate");
+        String rateStr = req.getReader().lines()
+                .findFirst()
+                .map(line -> line.split("=")[1])
+                .orElse(null);
         BigDecimal rate = Validator.validateRate(rateStr);
 
         ExchangeRateResponseDto updated = exchangeRateService.updateRate(baseCode, targetCode, rate);
