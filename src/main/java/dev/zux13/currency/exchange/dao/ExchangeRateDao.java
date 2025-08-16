@@ -30,7 +30,11 @@ public class ExchangeRateDao {
     }
 
     public Optional<ExchangeRate> findByCurrencyIds(Long baseCurrencyId, Long targetCurrencyId) {
-        return jdbcTemplate.queryForObject(FIND_BY_CURRENCY_IDS_SQL, exchangeRateRowMapper, baseCurrencyId, targetCurrencyId);
+        return jdbcTemplate.queryForObject(FIND_BY_CURRENCY_IDS_SQL,
+                exchangeRateRowMapper,
+                baseCurrencyId,
+                targetCurrencyId
+        );
     }
 
     public ExchangeRate save(ExchangeRate entity) {
@@ -47,7 +51,12 @@ public class ExchangeRateDao {
     }
 
     public void update(ExchangeRate entity) {
-        jdbcTemplate.update(UPDATE_SQL, entity.getRate(), entity.getId());
+        jdbcTemplate.update(UPDATE_SQL,
+                entity.getBaseCurrencyId(),
+                entity.getTargetCurrencyId(),
+                entity.getRate(),
+                entity.getId()
+        );
     }
 
     public boolean delete(Long id) {
