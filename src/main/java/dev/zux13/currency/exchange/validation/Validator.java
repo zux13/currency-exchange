@@ -8,22 +8,29 @@ import java.math.BigDecimal;
 @UtilityClass
 public class Validator {
 
+    public static final int CURRENCY_CODE_LENGTH = 3;
+    private static final int CURRENCY_PAIR_LENGTH = 6;
+    private static final int MAX_CURRENCY_NAME_LENGTH = 40;
+    private static final int PATH_PREFIX_LENGTH = 1;
+    private static final String CURRENCY_CODE_REGEX = "^[A-Z]{" + CURRENCY_CODE_LENGTH + "}$";
+    private static final String CURRENCY_PAIR_REGEX = "^[A-Z]{" + CURRENCY_PAIR_LENGTH + "}$";
+
     public String validateAndExtractPath(String pathInfo) {
         if (pathInfo == null || "/".equals(pathInfo)) {
             throw new ValidationException("A parameter is required in the path");
         }
-        return pathInfo.substring(1).toUpperCase();
+        return pathInfo.substring(PATH_PREFIX_LENGTH).toUpperCase();
     }
 
     public void validateCurrencyCode(String code) {
-        if (code == null || !code.matches("^[A-Z]{3}$")) {
-            throw new ValidationException("Currency code must be 3 uppercase letters");
+        if (code == null || !code.matches(CURRENCY_CODE_REGEX)) {
+            throw new ValidationException("Currency code must be " + CURRENCY_CODE_LENGTH + " uppercase letters");
         }
     }
 
     public void validateCurrencyPair(String pair) {
-        if (pair == null || !pair.matches("^[A-Z]{6}$")) {
-            throw new ValidationException("Currency pair must be 6 uppercase letters (e.g., USDRUB)");
+        if (pair == null || !pair.matches(CURRENCY_PAIR_REGEX)) {
+            throw new ValidationException("Currency pair must be " + CURRENCY_PAIR_LENGTH + " uppercase letters (e.g., USDRUB)");
         }
     }
 
@@ -65,8 +72,8 @@ public class Validator {
 
     public void validateCurrencyName(String name) {
         validateFormField(name, "name");
-        if (name.length() > 50) {
-            throw new ValidationException("Currency name must be no more than 50 characters");
+        if (name.length() > MAX_CURRENCY_NAME_LENGTH) {
+            throw new ValidationException("Currency name must be no more than " + MAX_CURRENCY_NAME_LENGTH + " characters");
         }
     }
 

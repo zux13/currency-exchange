@@ -21,8 +21,8 @@ public class ExchangeRateServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String pair = getCurrencyPairFromPath(req);
-        String baseCode = pair.substring(0, 3);
-        String targetCode = pair.substring(3);
+        String baseCode = pair.substring(0, Validator.CURRENCY_CODE_LENGTH);
+        String targetCode = pair.substring(Validator.CURRENCY_CODE_LENGTH);
 
         ExchangeRateResponseDto dto = exchangeRateService.findByCurrencyCodes(baseCode, targetCode);
         JsonResponseWriter.write(resp, HttpServletResponse.SC_OK, dto);
@@ -39,13 +39,10 @@ public class ExchangeRateServlet extends HttpServlet {
 
     protected void doPatch(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String pair = getCurrencyPairFromPath(req);
-        String baseCode = pair.substring(0, 3);
-        String targetCode = pair.substring(3);
+        String baseCode = pair.substring(0, Validator.CURRENCY_CODE_LENGTH);
+        String targetCode = pair.substring(Validator.CURRENCY_CODE_LENGTH);
 
-        String rateStr = req.getReader().lines()
-                .findFirst()
-                .map(line -> line.split("=")[1])
-                .orElse(null);
+        String rateStr = extractRateFromRequest(req);
         BigDecimal rate = Validator.validateRate(rateStr);
 
         ExchangeRateResponseDto updated = exchangeRateService.updateRate(baseCode, targetCode, rate);
@@ -56,5 +53,17 @@ public class ExchangeRateServlet extends HttpServlet {
         String pair = Validator.validateAndExtractPath(req.getPathInfo());
         Validator.validateCurrencyPair(pair);
         return pair;
+    }
+
+    private String extractRateFromRequest(HttpServletRequest req) throws IOException {
+        return req.getReader().lines()
+                .findFirst()
+                .map(line -> {
+                    if (line.startsWith("rate=")) {
+                        return line.substring("rate=".length());
+                    }
+                    return null;
+                })
+                .orElse(null);
     }
 }
