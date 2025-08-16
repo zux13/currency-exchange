@@ -33,6 +33,7 @@ public class ExchangeRatesServlet extends HttpServlet {
 
         Validator.validateCurrencyCode(baseCode);
         Validator.validateCurrencyCode(targetCode);
+        Validator.validateDifferentCurrencies(baseCode, targetCode);
         BigDecimal rate = Validator.validateRate(rateStr);
 
         ExchangeRateSaveDto dto = new ExchangeRateSaveDto(baseCode, targetCode, rate);

@@ -29,7 +29,7 @@ public class CurrenciesServlet extends HttpServlet {
         String code = req.getParameter("code");
         String sign = req.getParameter("sign");
 
-        Validator.validateFormField(name, "name");
+        Validator.validateCurrencyName(name);
         Validator.validateCurrencyCode(code);
         Validator.validateFormField(sign, "sign");
 

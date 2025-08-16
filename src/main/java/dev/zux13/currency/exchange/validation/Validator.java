@@ -62,4 +62,17 @@ public class Validator {
             throw new ValidationException("Field '%s' is required".formatted(fieldName));
         }
     }
+
+    public void validateCurrencyName(String name) {
+        validateFormField(name, "name");
+        if (name.length() > 50) {
+            throw new ValidationException("Currency name must be no more than 50 characters");
+        }
+    }
+
+    public void validateDifferentCurrencies(String baseCode, String targetCode) {
+        if (baseCode.equals(targetCode)) {
+            throw new ValidationException("Base and target currencies must be different");
+        }
+    }
 }
