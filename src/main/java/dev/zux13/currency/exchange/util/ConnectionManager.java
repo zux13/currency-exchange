@@ -9,8 +9,7 @@ import java.sql.DriverManager;
 @UtilityClass
 public class ConnectionManager {
 
-    private final static String DB_URL = "jdbc:sqlite:%s/currency_exchange.db"
-            .formatted(System.getProperty("user.dir"));
+    private static String DB_URL;
 
     static {
         loadDriver();
@@ -23,6 +22,13 @@ public class ConnectionManager {
 
     @SneakyThrows
     public Connection get() {
+        if (DB_URL == null) {
+            throw new IllegalStateException("Database URL not set");
+        }
         return DriverManager.getConnection(DB_URL);
+    }
+
+    public static void setUrl(String url) {
+        DB_URL = url;
     }
 }

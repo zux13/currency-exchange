@@ -5,6 +5,7 @@ import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 import jakarta.servlet.annotation.WebListener;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -20,12 +21,36 @@ public class DatabaseInitializer implements ServletContextListener {
 
     @Override
     public void contextInitialized(ServletContextEvent sce) {
+        String appRoot = sce.getServletContext().getRealPath("/");
+        String dbUrl = "jdbc:sqlite:" + getDbFilePath(appRoot);
+
+        ConnectionManager.setUrl(dbUrl);
+
         try (Connection connection = ConnectionManager.get()) {
             initializeSchema(connection);
             initializeData(connection);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize database", e);
         }
+    }
+
+    private static String getDbFilePath(String appRoot) {
+        if (appRoot == null) {
+            throw new IllegalStateException("Failed to determine application root path. Is the application deployed as exploded WAR?");
+        }
+
+        File dbDir = new File(appRoot, "db");
+        if (!dbDir.exists()) {
+            if (!dbDir.mkdirs()) {
+                throw new RuntimeException("Failed to create directory for database: " + dbDir.getAbsolutePath());
+            }
+        }
+
+        if (!dbDir.isDirectory()) {
+            throw new RuntimeException("Database path is not a directory: " + dbDir.getAbsolutePath());
+        }
+
+        return new File(dbDir, "currency_exchange.db").getAbsolutePath();
     }
 
     private void initializeSchema(Connection connection) throws SQLException, IOException {
